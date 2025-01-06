@@ -1,0 +1,98 @@
+'''
+전기차 가격 예측 해커톤: 데이터로 EV를 읽다!
+전기차와 관련된 데이터를 활용하여 전기차 가격을 예측하는 AI 알고리즘 개발
+'''
+
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
+import seaborn as sns
+
+# train 데이터 불러오기
+
+train_df = pd.read_csv('data/train.csv')
+train_df
+
+# 결측치 확인
+
+missing_counts = train_df.isnull().sum()
+missing_counts
+
+# 제조사 별로 정렬
+
+train_df = train_df.sort_values(by = ['제조사'])
+train_df
+
+# knn 알고리즘으로 결측치 처리
+
+from sklearn.impute import KNNImputer
+
+imputer = KNNImputer(n_neighbors = 4) # 결측치 주변 4개의 평균으로 결측치 대체
+filled_train = imputer.fit_transform(train_df[['배터리용량']])
+train_df['배터리용량'] = filled_train
+print(train_df['배터리용량'])
+print(train_df.isnull().sum())
+
+# ID 순으로 재정렬
+
+train_df = train_df.sort_values(by = ['ID'])
+train_df
+
+# 제조사 종류
+
+train_df['제조사'].unique() ## A : Audi, B : BMW, H : Hyundai, K : Kia, P : Porsche, T : Tssla, V : Volvo
+
+# 구동방식 종류
+
+train_df['구동방식'].unique() 
+## AWD: 4륜구동
+## FWD: 전륜구동
+## RWD: 후륜구동
+
+# 차량 상태 종류
+
+train_df['차량상태'].unique()
+# Nearly New : 거의 새거
+# Brand New : 완전 새거
+# Pre-Owned : 중고
+
+# 데이터 필터링(무의미한 데이터 삭제)
+
+preprocessing_df = train_df.drop(columns = 'ID', axis = 1) ## ID 열 삭제
+
+# 레이블 인코딩(차량상태, 사고이력, 구동방식, 제조사)
+
+from sklearn.preprocessing import LabelEncoder
+
+encoder = LabelEncoder()
+preprocessing_df['차량상태'] = encoder.fit_transform(preprocessing_df['차량상태'])
+## Brand New : 0, Nearly New : 1, Pre-Owned : 2
+preprocessing_df['사고이력'] = encoder.fit_transform(preprocessing_df['사고이력'])
+## Yes : 1, No : 0
+preprocessing_df['구동방식'] = encoder.fit_transform(preprocessing_df['구동방식'])
+## AWD : 0, FWD : 1, RWD : 2
+preprocessing_df['제조사'] = encoder.fit_transform(preprocessing_df['제조사'])
+## A : 0, B : 1, H : 2, K : 3, P : 4, T : 5, V : 6
+
+# 원핫 인코딩(모델)
+
+from sklearn.preprocessing import OneHotEncoder
+
+ohe = OneHotEncoder(sparse_output = False)
+cat = ohe.fit_transform(preprocessing_df[['모델']]) ## cat : category
+cat
+ohe.categories_
+'''
+카테고리
+['EV6', 'ID4', 'ION5', 'ION6', 'IONIQ', 'KNE', 'M3', 'MS', 'MX',
+ 'MY', 'Niro', 'Q4eT', 'RSeTGT', 'Soul', 'Tay', 'TayCT', 'TayGTS',
+ 'eT', 'i3', 'i5', 'iX']
+'''
+
+df_cat = pd.DataFrame(cat, columns = ohe.categories_) ## 데이터프레임 변환
+df_cat
+
+preprocessing_df = pd.concat([preprocessing_df, df_cat], axis = 1) ## 데이터프레임 합치기
+preprocessing_df = preprocessing_df.drop(['모델'], axis = 1) ## 기존 칼럼 삭제(최종 데이터)
+
+preprocessing_df.to_csv('preprocessing_train.csv', index = False) ## csv파일 생성
