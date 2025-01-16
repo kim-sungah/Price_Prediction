@@ -1,1 +1,90 @@
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
+import seaborn as sns
 
+# 데이터 불러오기
+## Column : ID, 제조사, 모델, 차량상태, 배터리용량, 구동방식, 주행거리(km), 보증기간(년), 사고이력, 연식(년), 가격(백만원)
+### test Column에는 '가격(백만원)' 없음
+train_df = pd.read_csv('data/train.csv')
+
+# 결측치 확인(배터리용량 column에 결측치 존재)
+missing_counts = train_df.isnull().sum()
+missing_counts
+
+# 결측치 처리(KNN 알고리즘 적용)
+from sklearn.impute import KNNImputer
+
+train_df = train_df.sort_values(by = ['제조사']) # 제조사 별로 정렬
+imputer = KNNImputer(n_neighbors = 4) # 결측치 주변 4개의 평균으로 결측치 대체
+filled_train = imputer.fit_transform(train_df[['배터리용량']])
+train_df['배터리용량'] = filled_train
+train_df = train_df.sort_values(by = ['ID']) # ID 순으로 재정렬
+
+# Column 분석
+train_df['제조사'].unique() # A : Audi, B : BMW, H : Hyundai, K : Kia, P : Porsche, T : Tssla, V : Volvo
+train_df['구동방식'].unique() ## AWD(4륜구동), FWD(전륜구동), RWD(후륜구동)
+train_df['차량상태'].unique() ### Nearly New(거의 새거), Brand New(완전 새거), Pre-Owned(중고)
+
+preprocessing_df = train_df.drop(columns = 'ID', axis = 1) # ID 열 삭제
+
+# 범주형 데이터 인코딩
+from sklearn.preprocessing import OneHotEncoder
+
+ohe = OneHotEncoder(sparse_output = False)
+df = preprocessing_df[['차량상태', '사고이력', '구동방식', '제조사', '모델']].copy()
+cols = df.select_dtypes(include = 'object').columns
+cat_ = ohe.fit_transform(df[cols])
+df_cat_ = pd.DataFrame(cat_, columns = ohe.get_feature_names_out())
+
+preprocessing_df = pd.concat([preprocessing_df, df_cat_], axis = 1) # 데이터프레임 합치기
+preprocessing_df = preprocessing_df.drop(cols, axis = 1) # 칼럼 삭제
+
+# 이상치 탐색
+## 가격(백만원) boxplot
+plt.figure(figsize = (10, 5))
+plt.boxplot(preprocessing_df['가격(백만원)'])
+plt.show()
+
+# IQR 기반 이상치 탐지
+q1 = preprocessing_df['가격(백만원)'].quantile(0.25)
+median = preprocessing_df['가격(백만원)'].quantile(0.5)
+q3 = preprocessing_df['가격(백만원)'].quantile(0.75)
+print(q1, median, q3)
+
+# IQR, 상한, 하한 구하기
+iqr = q3 - q1
+upper_fence = q3 + 1.5*iqr
+lower_fence = q1 - 1.5*iqr
+print(upper_fence, lower_fence)
+
+# 이상치 처리 함수
+def drop_outliers_zscore(df, column, threshold):
+    # 각 데이터의 Z-score 계산
+    z_scores = (df[column] - df[column].mean()) / df[column].std()
+    # Z-score의 절댓값이 threshold 이하인 데이터만 남기기 (초과이면 이상치이므로 제거)
+    df_drop_outliers = df[abs(z_scores) <= threshold]
+    
+    return df_drop_outliers
+
+# 각격(백만원) 이상치 제거
+train_df_zscore = drop_outliers_zscore(preprocessing_df, '가격(백만원)', upper_fence)
+train_df_zscore.shape
+
+# 이상치 갯수 확인
+len(preprocessing_df) - len(preprocessing_df_zscore)
+
+# 이상치 처리 전, 후 히스토그램
+fig, ax = plt.subplots(nrows= 1, ncols = 2, figsize = (12, 5), sharey = True)
+
+sns.histplot(data = preprocessing_df, x = '가격(백만원)', kde = True, ax = ax[0])
+sns.histplot(data = preprocessing_df_zscore, x = '가격(백만원)', kde = True, ax = ax[1])
+
+ax[0].set_title("Before Outlier Handling")
+ax[1].set_title("After Outlier Handling")
+
+ax[0].set_xlabel("price(million won)")
+ax[1].set_xlabel("price(million won)")
+
+# 최종 데이터
+preprocessing_df
