@@ -1,0 +1,182 @@
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, AlphaDropout, Dropout # Dense : 은닉층, Dropout and AlphaDropout : 은닉층 사이 신경망 랜덤 제거(효율성 증가)
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint # 모델 성능 변화가 거의 없을 때 훈련 조기 종료
+from sklearn.model_selection import train_test_split # 데이터 분할
+from sklearn.preprocessing import StandardScaler # 표준화
+from keras.layers import BatchNormalization # 배치 정규화
+from keras.initializers import lecun_normal # 가중치 초기화
+
+### Sequential 회귀 분석
+
+df = pd.read_csv('/content/drive/MyDrive/Colab Notebooks/공모전/data/preprocessing_train.xls')
+X = df.drop('가격(백만원)', axis = 1).values
+y = df['가격(백만원)'].values.round().astype(int)
+
+# 표준화
+scaler = StandardScaler()
+X = scaler.fit_transform(X)
+
+# 정규화
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler()
+X = scaler.fit_transform(X)
+
+# 학습 데이터(0.8), 검증 데이터(0.2) 분할
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size = 0.2, random_state = 42)
+
+# 모델 (activation = relu, MinMaxScaler 적용)
+model = Sequential()
+model.add(Dense(256, activation = 'relu', input_shape = (X_train.shape[1],)))
+# model.add(Dropout(0.2))
+model.add(Dense(128, activation = 'relu'))
+# model.add(Dropout(0.2))
+model.add(Dense(128, activation = 'relu'))
+# model.add(Dropout(0.2))
+model.add(Dense(64, activation = 'relu'))
+# odel.add(Dropout(0.2))
+model.add(Dense(1, activation = 'linear'))
+model.summary()
+
+# 학습단계에서 loss(손실함수) 계산, 평가단계에서 metrics(평가지표) 계산
+model.compile(loss = 'mse', optimizer = 'AdaDelta', metrics = ['mae'])
+
+estopping = EarlyStopping(monitor = 'val_loss', patience = 10, restore_best_weights = True, mode = 'min')
+mcheckpoint = ModelCheckpoint('/content/drive/MyDrive/Colab Notebooks/공모전/model_best.keras', monitor = 'val_loss', save_best_only = True, mode =  'min')
+# 모델 훈련
+history = model.fit(X_train, y_train, validation_data = (X_valid, y_valid), epochs = 500, batch_size = 32, callbacks = [estopping, mcheckpoint])
+
+from tensorflow.keras.models import load_model
+
+model = load_model('/content/drive/MyDrive/Colab Notebooks/공모전/model_best.keras')
+new_data = pd.read_csv('/content/drive/MyDrive/Colab Notebooks/공모전/data/preprocessing_test.xls').values.round().astype(int)
+new_data_scaled = scaler.fit_transform(new_data)
+predicted_prices = model.predict(new_data_scaled)
+
+# 정오분류표(오차행렬)
+from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, mean_absolute_error, r2_score
+
+Y_pred = model.predict(X_train)
+mse = mean_squared_error(y_train, Y_pred)
+mape = mean_absolute_percentage_error(y_train, Y_pred)
+mae = mean_absolute_error(y_train, Y_pred)
+rmse = np.sqrt(mse)
+r2 = r2_score(y_train, Y_pred)
+
+print(f'MAE : {mae}, MAPE : {mape}, MSE : {mse}, RMSE : {rmse}, R^2 : {r2}')
+# MAE : 2.080626964569092, MAPE : 0.043893299996852875, MSE : 8.288483619689941, RMSE : 2.8789726674093212, R^2 : 0.993790447711944
+
+# 모델2 (activation = elu, StandardScaler 적용)
+model_2 = Sequential()
+model_2.add(Dense(256, activation = 'elu', input_shape = (X_train.shape[1],)))
+# model_2.add(Dropout(0.2))
+model_2.add(Dense(128, activation = 'elu'))
+# model_2.add(Dropout(0.2))
+model_2.add(Dense(128, activation = 'elu'))
+# model_2.add(Dropout(0.2))
+model_2.add(Dense(64, activation = 'elu'))
+# model_2.add(Dropout(0.2))
+model_2.add(Dense(1, activation = 'linear'))
+model_2.summary()
+
+# 학습단계에서 loss(손실함수) 계산, 평가단계에서 metrics(평가지표) 계산
+model_2.compile(loss = 'mse', optimizer = 'Nadam', metrics = ['mae'])
+
+# 모델 훈련
+history = model_2.fit(X_train, y_train, validation_data = (X_valid, y_valid), epochs = 500, batch_size = 32, callbacks = [estopping, mcheckpoint])
+
+model_2 = load_model('/content/drive/MyDrive/Colab Notebooks/공모전/model_best.keras')
+new_data = pd.read_csv('/content/drive/MyDrive/Colab Notebooks/공모전/data/preprocessing_test.xls').values.round().astype(int)
+new_data_scaled = scaler.fit_transform(new_data)
+predicted_prices = model_2.predict(new_data_scaled)
+
+# 정오분류표(오차행렬)
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error, r2_score
+
+Y_pred = model_2.predict(X_train)
+mse = mean_squared_error(y_train, Y_pred)
+mae = mean_absolute_error(y_train, Y_pred)
+mape = mean_absolute_percentage_error(y_train, Y_pred)
+rmse = np.sqrt(mse)
+r2 = r2_score(y_train, Y_pred)
+
+print(f'MAE : {mae}, MAPE : {mape}, MSE : {mse}, RMSE : {rmse}, R^2 : {r2}')
+# MAE : 0.9010537266731262, MAPE : 0.019833168014883995, MSE : 2.2184462547302246, RMSE : 1.4894449485396313, R^2 : 0.998337984085083
+
+# 모델3 (activation = selu(kernel_initializer = 'lecun_normal', AlphaDropout), StandardScaler 적용)
+model_3 = Sequential()
+model_3.add(Dense(256, activation = 'selu', kernel_initializer = 'lecun_normal', input_shape = (X_train.shape[1],)))
+# model_3.add(AlphaDropout(0.2))
+model_3.add(Dense(128, activation = 'selu', kernel_initializer = 'lecun_normal'))
+# model_3.add(AlphaDropout(0.2))
+model_3.add(Dense(128, activation = 'selu', kernel_initializer = 'lecun_normal'))
+# model_3.add(AlphaDropout(0.2))
+model_3.add(Dense(64, activation = 'selu', kernel_initializer = 'lecun_normal'))
+# model_3.add(AlphaDropout(0.2))
+model_3.add(Dense(1, activation = 'linear'))
+model_3.summary()
+
+# 학습단계에서 loss(손실함수) 계산, 평가단계에서 metrics(평가지표) 계산
+model_3.compile(loss = 'mse', optimizer = 'Nadam', metrics = ['mae'])
+
+# 모델 훈련
+history = model_3.fit(X_train, y_train, validation_data = (X_valid, y_valid), epochs = 500, batch_size = 32, callbacks = [estopping, mcheckpoint], verbose = 1)
+
+model_3 = load_model('/content/drive/MyDrive/Colab Notebooks/공모전/model_best.keras')
+new_data = pd.read_csv('/content/drive/MyDrive/Colab Notebooks/공모전/data/preprocessing_test.xls').values.round().astype(int)
+new_data_scaled = scaler.fit_transform(new_data)
+predicted_prices = model_3.predict(new_data_scaled)
+
+# 정오분류표(오차행렬)
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error, r2_score
+
+Y_pred = model_3.predict(X_train)
+mse = mean_squared_error(y_train, Y_pred)
+mae = mean_absolute_error(y_train, Y_pred)
+mape = mean_absolute_percentage_error(y_train, Y_pred)
+rmse = np.sqrt(mse)
+r2 = r2_score(y_train, Y_pred)
+
+print(f'MAE : {mae}, MAPE : {mape}, MSE : {mse}, RMSE : {rmse}, R^2 : {r2}')
+# MAE : 0.9010537266731262, MAPE : 0.019833168014883995, MSE : 2.2184462547302246, RMSE : 1.4894449485396313, R^2 : 0.998337984085083
+
+# 모델4 (activation = swish, StandardScaler 적용)
+model_4 = Sequential()
+model_4.add(Dense(256, activation = 'swish', input_shape = (X_train.shape[1],)))
+# model_4.add(Dropout(0.2))
+model_4.add(Dense(128, activation = 'swish'))
+# model_4.add(Dropout(0.2))
+model_4.add(Dense(128, activation = 'swish'))
+# model_4.add(Dropout(0.2))
+model_4.add(Dense(64, activation = 'swish'))
+# model_4.add(Dropout(0.2))
+model_4.add(Dense(1, activation = 'linear'))
+model_4.summary()
+
+# 학습단계에서 loss(손실함수) 계산, 평가단계에서 metrics(평가지표) 계산
+model_4.compile(loss = 'mse', optimizer = 'Nadam', metrics = ['mae'])
+
+# 모델 훈련
+history = model_4.fit(X_train, y_train, validation_data = (X_valid, y_valid), epochs = 500, batch_size = 32, callbacks = [estopping, mcheckpoint], verbose = 1)
+
+model_4 = load_model('/content/drive/MyDrive/Colab Notebooks/공모전/model_best.keras')
+new_data = pd.read_csv('/content/drive/MyDrive/Colab Notebooks/공모전/data/preprocessing_test.xls').values.round().astype(int)
+new_data_scaled = scaler.fit_transform(new_data)
+predicted_prices = model_4.predict(new_data_scaled)
+
+# 정오분류표(오차행렬)
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error, r2_score
+
+Y_pred = model_4.predict(X_train)
+mse = mean_squared_error(y_train, Y_pred)
+mae = mean_absolute_error(y_train, Y_pred)
+mape = mean_absolute_percentage_error(y_train, Y_pred)
+rmse = np.sqrt(mse)
+r2 = r2_score(y_train, Y_pred)
+
+print(f'MAE : {mae}, MAPE : {mape}, MSE : {mse}, RMSE : {rmse}, R^2 : {r2}')
+MAE : 0.881937563419342, MAPE : 0.01947624236345291, MSE : 2.1451058387756348, RMSE : 1.4646179839042106, R^2 : 0.9983929395675659
