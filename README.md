@@ -338,3 +338,11 @@ history = model_3.fit(X_train, y_train, validation_data = (X_valid, y_valid), ep
 ```
 history = model_4.fit(X_train, y_train, validation_data = (X_valid, y_valid), epochs = 500, batch_size = 32, callbacks = [estopping, mcheckpoint], verbose = 1)
 ```
+
+### 모델 정밀도 시각화
+- 성능 평가 지표
+1. MAPE : Mean Absolute Percentage Error(평균 절대 비율 오차). MAE를 비율로 표현하여 스케일 의존적 에러 문제점 개선.
+2. RMSE : Root Mean Squared Error(평균 제곱근 오차). MSE에 루트를 씌워 왜곡을 줄임.
+
+
+![image](https://github.com/user-attachments/assets/f243bbdb-404e-4ab7-b829-efa7c4d5c5f1)
